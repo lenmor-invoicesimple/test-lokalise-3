@@ -15,6 +15,21 @@ jobs:
         with:
           fetch-depth: 0
 
+      # - name: Trigger Machine Translation
+      #   run: |
+      #     # Trigger auto-translation for all target languages
+      #     curl -X POST \
+      #       "https://api.lokalise.com/api2/projects/${{ secrets.LOKALISE_PROJECT_ID }}/keys/bulk_update" \
+      #       -H "X-Api-Token: ${{ secrets.LOKALISE_API_TOKEN }}" \
+      #       -H "Content-Type: application/json" \
+      #       -d '{
+      #         "keys": [],
+      #         "use_automations": true
+      #       }'
+          
+      #     # Wait a bit for translations to complete
+      #     sleep 30
+
       - name: Pull from Lokalise
         uses: lokalise/lokalise-pull-action@v3.9.0
         with:

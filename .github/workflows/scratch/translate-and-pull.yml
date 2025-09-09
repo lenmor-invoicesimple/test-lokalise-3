@@ -1,0 +1,81 @@
+name: Translate and Pull from Lokalise
+
+on:
+  workflow_dispatch:
+    inputs:
+      target_languages:
+        description: 'Comma-separated list of target languages (e.g., es,fr,de)'
+        required: false
+        default: 'es,fr'
+      translation_provider:
+        description: 'Translation provider'
+        required: false
+        default: 'google'
+        type: choice
+        options:
+          - google
+          - deepl
+          - microsoft
+
+jobs:
+  translate-and-pull:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install curl and jq
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y curl jq
+
+      - name: Get untranslated keys
+        id: get-keys
+        run: |
+          # Get all keys that need translation
+          response=$(curl -s -X GET \
+            "https://api.lokalise.com/api2/projects/${{ secrets.LOKALISE_PROJECT_ID }}/keys?filter_translation_status=untranslated&limit=5000" \
+            -H "X-Api-Token: ${{ secrets.LOKALISE_API_TOKEN }}")
+          
+          key_ids=$(echo "$response" | jq -r '.keys[].key_id' | tr '\n' ',' | sed 's/,$//')
+          echo "key_ids=$key_ids" >> $GITHUB_OUTPUT
+
+      - name: Trigger Machine Translation
+        if: steps.get-keys.outputs.key_ids != ''
+        run: |
+          # Split target languages
+          IFS=',' read -ra LANGS <<< "${{ github.event.inputs.target_languages }}"
+          
+          for lang in "${LANGS[@]}"; do
+            echo "Triggering translation for language: $lang"
+            
+            curl -X POST \
+              "https://api.lokalise.com/api2/projects/${{ secrets.LOKALISE_PROJECT_ID }}/translations" \
+              -H "X-Api-Token: ${{ secrets.LOKALISE_API_TOKEN }}" \
+              -H "Content-Type: application/json" \
+              -d "{
+                \"key_ids\": [\"${{ steps.get-keys.outputs.key_ids }}\"],
+                \"language_iso\": \"$lang\",
+                \"translation_provider\": \"${{ github.event.inputs.translation_provider }}\"
+              }"
+          done
+
+      - name: Wait for translations to complete
+        run: |
+          echo "Waiting for translations to complete..."
+          sleep 60  # Adjust based on your project size
+
+      - name: Pull from Lokalise
+        uses: lokalise/lokalise-pull-action@v3.9.0
+        with:
+          api_token: ${{ secrets.LOKALISE_API_TOKEN }}
+          project_id: ${{ secrets.LOKALISE_PROJECT_ID }}
+          translations_path: src/locales
+          base_lang: en
+          file_format: json
+          flat_naming: true
+          always_pull_base: false
+          additional_params: "--indentation 4sp --filter-data translated"
