@@ -40,4 +40,4 @@ jobs:
           file_format: json
           flat_naming: true
           always_pull_base: false  # Set to true if you want to pull base language changes too
-          additional_params: "--indentation 4sp"  # Match your current JSON formatting
+          additional_params: "--indentation=4sp"  # Match your current JSON formatting
