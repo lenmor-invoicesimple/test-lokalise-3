@@ -27,6 +27,7 @@ export default function Section() {
         >
           <option value="en">English</option>
           <option value="fr">Français</option>
+          <option value="es">Español</option>
         </select>
       </div>
       <h1 className="text-2xl font-bold">

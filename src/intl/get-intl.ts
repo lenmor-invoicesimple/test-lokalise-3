@@ -118,6 +118,7 @@ export async function getIntl() {
 const dictionaries = {
   en: () => import('@/locales/en.json').then((module) => module.default),
   fr: () => import('@/locales/fr.json').then((module) => module.default),
+  es: () => import('@/locales/es.json').then((module) => module.default),
   //   de: () => import('languages/de.json').then((module) => module.default),
   //   it: () => import('languages/it.json').then((module) => module.default),
   //   es: () => import('languages/es.json').then((module) => module.default),
