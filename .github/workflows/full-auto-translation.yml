@@ -1,0 +1,146 @@
+name: Full Auto-Translation Workflow
+
+on:
+  workflow_dispatch:
+    inputs:
+      target_languages:
+        description: 'Languages to translate (comma-separated, e.g. es,fr,de)'
+        required: true
+        default: 'es,fr'
+      wait_time:
+        description: 'Minutes to wait for translation (default: 3)'
+        required: false
+        default: '3'
+
+jobs:
+  translate-and-pull:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y curl jq
+
+      - name: Step 1 - Ensure target languages exist
+        run: |
+          echo "=== Adding target languages to project ==="
+          
+          IFS=',' read -ra LANGS <<< "${{ github.event.inputs.target_languages }}"
+          
+          for lang in "${LANGS[@]}"; do
+            echo "Checking/adding language: $lang"
+            
+            # Add language (will ignore if it already exists)
+            response=$(curl -s -X POST \
+              "https://api.lokalise.com/api2/projects/${{ secrets.LOKALISE_PROJECT_ID }}/languages" \
+              -H "X-Api-Token: ${{ secrets.LOKALISE_API_TOKEN }}" \
+              -H "Content-Type: application/json" \
+              -d "{\"languages\": [{\"lang_iso\": \"$lang\"}]}")
+            
+            echo "Response for $lang: $response"
+          done
+
+      - name: Step 2 - Trigger automation by creating placeholder translations
+        run: |
+          echo "=== Triggering Lokalise automation ==="
+          
+          # Get all keys with English translations
+          keys_response=$(curl -s -X GET \
+            "https://api.lokalise.com/api2/projects/${{ secrets.LOKALISE_PROJECT_ID }}/keys?include_translations=1&limit=5000" \
+            -H "X-Api-Token: ${{ secrets.LOKALISE_API_TOKEN }}")
+          
+          echo "$keys_response" | jq -r '.keys[] | select(.translations[]? | select(.language_iso == "en")) | .key_id' > english_keys.txt
+          
+          IFS=',' read -ra LANGS <<< "${{ github.event.inputs.target_languages }}"
+          
+          for lang in "${LANGS[@]}"; do
+            echo "Creating placeholder translations for $lang"
+            
+            while IFS= read -r key_id; do
+              if [ ! -z "$key_id" ]; then
+                # Create empty translation to trigger automation
+                curl -s -X POST \
+                  "https://api.lokalise.com/api2/projects/${{ secrets.LOKALISE_PROJECT_ID }}/translations" \
+                  -H "X-Api-Token: ${{ secrets.LOKALISE_API_TOKEN }}" \
+                  -H "Content-Type: application/json" \
+                  -d "{
+                    \"translations\": [
+                      {
+                        \"key_id\": $key_id,
+                        \"language_iso\": \"$lang\",
+                        \"translation\": \"\",
+                        \"is_fuzzy\": true
+                      }
+                    ]
+                  }" > /dev/null 2>&1
+                
+                sleep 0.2  # Rate limiting
+              fi
+            done < english_keys.txt
+          done
+
+      - name: Step 3 - Wait for Lokalise automation to complete
+        run: |
+          wait_minutes=${{ github.event.inputs.wait_time }}
+          echo "=== Waiting $wait_minutes minutes for Lokalise automation ==="
+          sleep $((wait_minutes * 60))
+
+      - name: Step 4 - Verify translations were created
+        run: |
+          echo "=== Checking translation progress ==="
+          
+          IFS=',' read -ra LANGS <<< "${{ github.event.inputs.target_languages }}"
+          
+          for lang in "${LANGS[@]}"; do
+            echo "Checking $lang translations:"
+            
+            # Count total vs translated
+            total=$(curl -s -X GET \
+              "https://api.lokalise.com/api2/projects/${{ secrets.LOKALISE_PROJECT_ID }}/translations?filter_lang_iso=$lang&limit=1000" \
+              -H "X-Api-Token: ${{ secrets.LOKALISE_API_TOKEN }}" | \
+              jq -r '.translations | length')
+            
+            translated=$(curl -s -X GET \
+              "https://api.lokalise.com/api2/projects/${{ secrets.LOKALISE_PROJECT_ID }}/translations?filter_lang_iso=$lang&filter_is_fuzzy=false&limit=1000" \
+              -H "X-Api-Token: ${{ secrets.LOKALISE_API_TOKEN }}" | \
+              jq -r '.translations | length')
+            
+            echo "$lang: $translated/$total translations completed"
+            
+            # Show some examples
+            echo "Sample translations:"
+            curl -s -X GET \
+              "https://api.lokalise.com/api2/projects/${{ secrets.LOKALISE_PROJECT_ID }}/translations?filter_lang_iso=$lang&filter_is_fuzzy=false&limit=3" \
+              -H "X-Api-Token: ${{ secrets.LOKALISE_API_TOKEN }}" | \
+              jq -r '.translations[]? | "- \(.translation)"'
+          done
+
+      - name: Step 5 - Pull translations back to GitHub
+        uses: lokalise/lokalise-pull-action@v3.9.0
+        with:
+          api_token: ${{ secrets.LOKALISE_API_TOKEN }}
+          project_id: ${{ secrets.LOKALISE_PROJECT_ID }}
+          translations_path: src/locales
+          base_lang: en
+          file_format: json
+          flat_naming: true
+          skip_include_tags: true
+          always_pull_base: false
+          additional_params: "--indentation=4sp"
+
+      - name: Step 6 - Summary
+        run: |
+          echo "=== Workflow Complete ==="
+          echo "✅ Target languages added to Lokalise"
+          echo "✅ Automation triggered for untranslated keys"
+          echo "✅ Waited for translations to complete"
+          echo "✅ Pulled translations back to GitHub"
+          echo ""
+          echo "If a PR was created, review and merge it to get translations in your main branch."
+          echo "If no PR was created, either no new translations were found or automation didn't complete."

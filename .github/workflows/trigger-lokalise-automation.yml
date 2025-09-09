@@ -1,0 +1,182 @@
+name: Trigger Lokalise Auto-Translation
+
+on:
+  workflow_dispatch:
+    inputs:
+      target_languages:
+        description: 'Languages to translate (comma-separated, e.g. es,fr,de)'
+        required: true
+        default: 'es,fr'
+
+jobs:
+  trigger-lokalise-automation:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y curl jq
+
+      - name: Get all untranslated keys
+        id: get-keys
+        run: |
+          echo "=== Getting keys that need translation ==="
+          
+          # Get all keys
+          response=$(curl -s -X GET \
+            "https://api.lokalise.com/api2/projects/${{ secrets.LOKALISE_PROJECT_ID }}/keys?include_translations=1&limit=5000" \
+            -H "X-Api-Token: ${{ secrets.LOKALISE_API_TOKEN }}")
+          
+          echo "$response" | jq -r '.keys[]' > all_keys.json
+          
+          # Find keys that need translation
+          key_ids=""
+          while IFS= read -r key; do
+            key_id=$(echo "$key" | jq -r '.key_id')
+            key_name=$(echo "$key" | jq -r '.key_name.web')
+            
+            # Check if this key has English translation
+            has_english=$(echo "$key" | jq -r '.translations[]? | select(.language_iso == "en") | .translation // empty')
+            
+            if [ ! -z "$has_english" ] && [ "$has_english" != "null" ] && [ "$has_english" != "" ]; then
+              echo "Key $key_name ($key_id) has English translation: $has_english"
+              if [ -z "$key_ids" ]; then
+                key_ids="$key_id"
+              else
+                key_ids="$key_ids,$key_id"
+              fi
+            fi
+          done < all_keys.json
+          
+          echo "key_ids=$key_ids" >> $GITHUB_OUTPUT
+          echo "Found keys that need translation: $key_ids"
+
+      - name: Trigger Lokalise Automation via Key Updates
+        if: steps.get-keys.outputs.key_ids != ''
+        run: |
+          echo "=== Triggering Lokalise automation by updating keys ==="
+          
+          IFS=',' read -ra KEY_IDS <<< "${{ steps.get-keys.outputs.key_ids }}"
+          IFS=',' read -ra LANGS <<< "${{ github.event.inputs.target_languages }}"
+          
+          # Ensure target languages exist in the project
+          for lang in "${LANGS[@]}"; do
+            echo "Ensuring language $lang exists in project"
+            
+            existing=$(curl -s -X GET \
+              "https://api.lokalise.com/api2/projects/${{ secrets.LOKALISE_PROJECT_ID }}/languages" \
+              -H "X-Api-Token: ${{ secrets.LOKALISE_API_TOKEN }}" | \
+              jq -r --arg lang "$lang" '.languages[]? | select(.lang_iso == $lang) | .lang_iso')
+            
+            if [ "$existing" != "$lang" ]; then
+              echo "Adding language $lang"
+              curl -s -X POST \
+                "https://api.lokalise.com/api2/projects/${{ secrets.LOKALISE_PROJECT_ID }}/languages" \
+                -H "X-Api-Token: ${{ secrets.LOKALISE_API_TOKEN }}" \
+                -H "Content-Type: application/json" \
+                -d "{\"languages\": [{\"lang_iso\": \"$lang\"}]}"
+              sleep 1
+            fi
+          done
+          
+          # Method 1: Try to trigger automation by updating key metadata
+          for key_id in "${KEY_IDS[@]}"; do
+            if [ ! -z "$key_id" ]; then
+              echo "Triggering automation for key $key_id by updating metadata"
+              
+              # Get current key data
+              key_data=$(curl -s -X GET \
+                "https://api.lokalise.com/api2/projects/${{ secrets.LOKALISE_PROJECT_ID }}/keys/$key_id" \
+                -H "X-Api-Token: ${{ secrets.LOKALISE_API_TOKEN }}")
+              
+              current_description=$(echo "$key_data" | jq -r '.key.description // ""')
+              
+              # Update key with a small change to trigger automation
+              curl -s -X PUT \
+                "https://api.lokalise.com/api2/projects/${{ secrets.LOKALISE_PROJECT_ID }}/keys/$key_id" \
+                -H "X-Api-Token: ${{ secrets.LOKALISE_API_TOKEN }}" \
+                -H "Content-Type: application/json" \
+                -d "{
+                  \"description\": \"$current_description\",
+                  \"tags\": [\"auto-translate\"]
+                }"
+              
+              sleep 0.5
+            fi
+          done
+
+      - name: Alternative - Create empty translations to trigger automation
+        if: steps.get-keys.outputs.key_ids != ''
+        run: |
+          echo "=== Alternative method: Creating empty translations ==="
+          
+          IFS=',' read -ra KEY_IDS <<< "${{ steps.get-keys.outputs.key_ids }}"
+          IFS=',' read -ra LANGS <<< "${{ github.event.inputs.target_languages }}"
+          
+          for lang in "${LANGS[@]}"; do
+            echo "Creating empty translations for $lang to trigger automation"
+            
+            for key_id in "${KEY_IDS[@]}"; do
+              if [ ! -z "$key_id" ]; then
+                echo "Creating empty translation for key $key_id in $lang"
+                
+                # Create empty translation - this might trigger automation
+                response=$(curl -s -X POST \
+                  "https://api.lokalise.com/api2/projects/${{ secrets.LOKALISE_PROJECT_ID }}/translations" \
+                  -H "X-Api-Token: ${{ secrets.LOKALISE_API_TOKEN }}" \
+                  -H "Content-Type: application/json" \
+                  -d "{
+                    \"translations\": [
+                      {
+                        \"key_id\": $key_id,
+                        \"language_iso\": \"$lang\",
+                        \"translation\": \"\",
+                        \"is_fuzzy\": true
+                      }
+                    ]
+                  }")
+                
+                echo "Response: $response"
+                sleep 0.3
+              fi
+            done
+          done
+
+      - name: Check if automation was triggered
+        run: |
+          echo "=== Waiting for automation to complete ==="
+          sleep 30
+          
+          echo "=== Checking for new translations ==="
+          IFS=',' read -ra LANGS <<< "${{ github.event.inputs.target_languages }}"
+          
+          for lang in "${LANGS[@]}"; do
+            echo "Checking translations for $lang:"
+            
+            translated_count=$(curl -s -X GET \
+              "https://api.lokalise.com/api2/projects/${{ secrets.LOKALISE_PROJECT_ID }}/translations?filter_lang_iso=$lang&filter_is_fuzzy=false&limit=100" \
+              -H "X-Api-Token: ${{ secrets.LOKALISE_API_TOKEN }}" | \
+              jq -r '.translations | length')
+            
+            echo "Found $translated_count non-fuzzy translations for $lang"
+            
+            # Show some examples
+            curl -s -X GET \
+              "https://api.lokalise.com/api2/projects/${{ secrets.LOKALISE_PROJECT_ID }}/translations?filter_lang_iso=$lang&limit=5" \
+              -H "X-Api-Token: ${{ secrets.LOKALISE_API_TOKEN }}" | \
+              jq -r '.translations[]? | "Key ID: \(.key_id) | Translation: \(.translation) | Fuzzy: \(.is_fuzzy)"'
+          done
+
+      - name: Manual trigger automation if needed
+        run: |
+          echo "=== If automation didn't trigger automatically, check these: ==="
+          echo "1. Go to Lokalise Settings → Automations"
+          echo "2. Ensure auto-translation is enabled for new/updated keys"
+          echo "3. Check that target languages are configured"
+          echo "4. Verify Google Translate is set as the provider"
+          echo ""
+          echo "If automation is properly configured, translations should appear within a few minutes."

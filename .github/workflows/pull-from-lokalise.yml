@@ -42,3 +42,13 @@ jobs:
           always_pull_base: false  # Set to true if you want to pull base language changes too
           skip_include_tags: true  # Skip automatic tag filtering by branch name
           additional_params: "--indentation=4sp"  # Match your current JSON formatting
+          # PR customization options:
+          # temp_branch_prefix: "translations"  # Creates branches like "translations-some-updates-123"
+          # pr_title: "🌍 Update translations from Lokalise"
+          # pr_body: |
+          #   This PR contains updated translations from Lokalise.
+            
+          #   Please review the changes and merge when ready.
+            
+          #   Updated languages: All configured target languages
+          # pr_labels: "translations,automated"  # Add labels to the PR

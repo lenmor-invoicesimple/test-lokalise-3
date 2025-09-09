@@ -44,34 +44,46 @@ jobs:
           echo "Found key IDs: $key_ids"
           echo "key_ids=$key_ids" >> $GITHUB_OUTPUT
 
-      - name: Trigger Translation
+      - name: Create Empty Translations to Trigger Automation
         if: steps.get-keys.outputs.key_ids != ''
         run: |
-          echo "=== Triggering translation ==="
+          echo "=== Creating empty translations to trigger automation ==="
           
           IFS=',' read -ra LANGS <<< "${{ github.event.inputs.target_languages }}"
           IFS=',' read -ra KEYS <<< "${{ steps.get-keys.outputs.key_ids }}"
           
           for lang in "${LANGS[@]}"; do
-            echo "Translating to language: $lang"
+            echo "Creating empty translations for language: $lang"
             
-            # Use the correct bulk translation API endpoint
-            key_ids_json=$(printf '%s\n' "${KEYS[@]}" | jq -R . | jq -s .)
+            # Prepare translations array for bulk creation
+            translations_json="["
+            first=true
             
-            echo "Triggering bulk auto-translation for $lang"
-            response=$(curl -s -X POST \
-              "https://api.lokalise.com/api2/projects/${{ secrets.LOKALISE_PROJECT_ID }}/translations/auto-translate" \
+            for key_id in "${KEYS[@]}"; do
+              if [ ! -z "$key_id" ]; then
+                if [ "$first" = true ]; then
+                  first=false
+                else
+                  translations_json+=","
+                fi
+                translations_json+="{\"key_id\":$key_id,\"language_iso\":\"$lang\",\"translation\":\"\",\"is_fuzzy\":true}"
+              fi
+            done
+            translations_json+="]"
+            
+            echo "Creating translations for $lang with payload: {\"translations\":$translations_json}"
+            
+            response=$(curl -s -X PUT \
+              "https://api.lokalise.com/api2/projects/${{ secrets.LOKALISE_PROJECT_ID }}/translations" \
               -H "X-Api-Token: ${{ secrets.LOKALISE_API_TOKEN }}" \
               -H "Content-Type: application/json" \
-              -d "{
-                \"key_ids\": $key_ids_json,
-                \"target_lang_iso\": \"$lang\",
-                \"provider\": \"${{ github.event.inputs.translation_provider }}\"
-              }")
+              -d "{\"translations\":$translations_json}")
             
-            echo "Bulk translation response for $lang: $response"
-            sleep 2  # Rate limiting
+            echo "Translation creation response for $lang: $response"
+            sleep 2
           done
+          
+          echo "Empty translations created. If automation is enabled, it should now trigger auto-translation."
 
       - name: Alternative - Bulk Translation via CLI
         if: steps.get-keys.outputs.key_ids != ''
