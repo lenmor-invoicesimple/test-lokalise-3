@@ -55,43 +55,78 @@ jobs:
           for lang in "${LANGS[@]}"; do
             echo "Translating to language: $lang"
             
-            for key in "${KEYS[@]}"; do
-              if [ ! -z "$key" ]; then
-                echo "Translating key: $key to $lang"
-                
-                response=$(curl -s -X POST \
-                  "https://api.lokalise.com/api2/projects/${{ secrets.LOKALISE_PROJECT_ID }}/keys/$key/translations/$lang" \
-                  -H "X-Api-Token: ${{ secrets.LOKALISE_API_TOKEN }}" \
-                  -H "Content-Type: application/json" \
-                  -d "{
-                    \"translation\": \"AUTO_TRANSLATE\",
-                    \"is_fuzzy\": false
-                  }")
-                
-                echo "Translation response: $response"
-                sleep 1  # Rate limiting
-              fi
-            done
+            # Use the correct bulk translation API endpoint
+            key_ids_json=$(printf '%s\n' "${KEYS[@]}" | jq -R . | jq -s .)
+            
+            echo "Triggering bulk auto-translation for $lang"
+            response=$(curl -s -X POST \
+              "https://api.lokalise.com/api2/projects/${{ secrets.LOKALISE_PROJECT_ID }}/translations/auto-translate" \
+              -H "X-Api-Token: ${{ secrets.LOKALISE_API_TOKEN }}" \
+              -H "Content-Type: application/json" \
+              -d "{
+                \"key_ids\": $key_ids_json,
+                \"target_lang_iso\": \"$lang\",
+                \"provider\": \"${{ github.event.inputs.translation_provider }}\"
+              }")
+            
+            echo "Bulk translation response for $lang: $response"
+            sleep 2  # Rate limiting
           done
 
-      - name: Alternative - Bulk Translation
+      - name: Alternative - Bulk Translation via CLI
         if: steps.get-keys.outputs.key_ids != ''
         run: |
-          echo "=== Alternative: Using Lokalise CLI for bulk translation ==="
+          echo "=== Using Lokalise CLI for auto-translation ==="
           
           # Install Lokalise CLI
           curl -sfL https://raw.githubusercontent.com/lokalise/lokalise-cli-2-go/master/install.sh | sh
           
-          # Try to trigger auto-translation using CLI
           IFS=',' read -ra LANGS <<< "${{ github.event.inputs.target_languages }}"
+          IFS=',' read -ra KEYS <<< "${{ steps.get-keys.outputs.key_ids }}"
           
           for lang in "${LANGS[@]}"; do
-            echo "Attempting auto-translation for $lang"
+            echo "Auto-translating keys to $lang using CLI"
             
-            # This command might trigger auto-translation
-            ./bin/lokalise2 key list \
-              --project-id "${{ secrets.LOKALISE_PROJECT_ID }}" \
-              --token "${{ secrets.LOKALISE_API_TOKEN }}" \
-              --filter-langs "$lang" \
-              --filter-translation-status "untranslated" || true
+            # Create a file with key IDs for bulk processing
+            printf '%s\n' "${KEYS[@]}" > key_ids.txt
+            
+            # Use CLI to trigger auto-translation (if available)
+            echo "Available CLI commands:"
+            ./bin/lokalise2 --help | grep -i translate || echo "No direct translate command found"
+            
+            echo "Trying alternative approach - updating translations to trigger automation"
+            for key_id in "${KEYS[@]}"; do
+              if [ ! -z "$key_id" ]; then
+                echo "Processing key $key_id for language $lang"
+                
+                # Try to get the base language translation first
+                base_translation=$(curl -s -X GET \
+                  "https://api.lokalise.com/api2/projects/${{ secrets.LOKALISE_PROJECT_ID }}/keys/$key_id" \
+                  -H "X-Api-Token: ${{ secrets.LOKALISE_API_TOKEN }}" | \
+                  jq -r '.key.translations[]? | select(.language_iso == "en") | .translation // empty')
+                
+                if [ ! -z "$base_translation" ] && [ "$base_translation" != "null" ]; then
+                  echo "Found base translation for key $key_id: $base_translation"
+                  
+                  # Create or update translation to trigger automation
+                  response=$(curl -s -X PUT \
+                    "https://api.lokalise.com/api2/projects/${{ secrets.LOKALISE_PROJECT_ID }}/translations" \
+                    -H "X-Api-Token: ${{ secrets.LOKALISE_API_TOKEN }}" \
+                    -H "Content-Type: application/json" \
+                    -d "{
+                      \"translations\": [
+                        {
+                          \"key_id\": $key_id,
+                          \"language_iso\": \"$lang\",
+                          \"translation\": \"$base_translation\",
+                          \"is_fuzzy\": true
+                        }
+                      ]
+                    }")
+                  
+                  echo "Update response for key $key_id: $response"
+                  sleep 1
+                fi
+              fi
+            done
           done
