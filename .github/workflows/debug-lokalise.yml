@@ -29,10 +29,17 @@ jobs:
           echo -e "\n=== Checking Available Keys ==="
           
           # Get all keys (first 20)
-          echo "Available Keys:"
+          echo "Available Keys with Translation Status:"
           curl -s -X GET \
-            "https://api.lokalise.com/api2/projects/${{ secrets.LOKALISE_PROJECT_ID }}/keys?limit=20" \
-            -H "X-Api-Token: ${{ secrets.LOKALISE_API_TOKEN }}" | jq -r '.keys[] | "Key: \(.key_name.web) | Tags: \(.tags // []) | Platforms: \(.platforms // [])"'
+            "https://api.lokalise.com/api2/projects/${{ secrets.LOKALISE_PROJECT_ID }}/keys?limit=20&include_translations=1" \
+            -H "X-Api-Token: ${{ secrets.LOKALISE_API_TOKEN }}" | jq -r '.keys[] | "Key: \(.key_name.web) | ID: \(.key_id) | Tags: \(.tags // []) | Translations: \(.translations | length)"'
+          
+          echo -e "\n=== Checking Untranslated Keys ==="
+          
+          # Get untranslated keys specifically
+          curl -s -X GET \
+            "https://api.lokalise.com/api2/projects/${{ secrets.LOKALISE_PROJECT_ID }}/keys?filter_translation_status=untranslated&limit=10" \
+            -H "X-Api-Token: ${{ secrets.LOKALISE_API_TOKEN }}" | jq -r '.keys[] | "Untranslated Key: \(.key_name.web) | ID: \(.key_id)"'
           
           echo -e "\n=== Checking Available Languages ==="
           

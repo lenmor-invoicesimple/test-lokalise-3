@@ -1,0 +1,97 @@
+name: Manual Translation Trigger
+
+on:
+  workflow_dispatch:
+    inputs:
+      target_languages:
+        description: 'Languages to translate (comma-separated, e.g. es,fr,de)'
+        required: true
+        default: 'es,fr'
+      translation_provider:
+        description: 'Translation provider'
+        required: false
+        default: 'google'
+        type: choice
+        options:
+          - google
+          - deepl
+          - microsoft
+
+jobs:
+  trigger-translation:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Install curl and jq
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y curl jq
+
+      - name: Get untranslated keys
+        id: get-keys
+        run: |
+          echo "=== Getting untranslated keys ==="
+          
+          # Get all keys that are untranslated
+          response=$(curl -s -X GET \
+            "https://api.lokalise.com/api2/projects/${{ secrets.LOKALISE_PROJECT_ID }}/keys?limit=5000" \
+            -H "X-Api-Token: ${{ secrets.LOKALISE_API_TOKEN }}")
+          
+          echo "Response: $response"
+          
+          # Extract key IDs
+          key_ids=$(echo "$response" | jq -r '.keys[].key_id' | head -20 | tr '\n' ',' | sed 's/,$//')
+          echo "Found key IDs: $key_ids"
+          echo "key_ids=$key_ids" >> $GITHUB_OUTPUT
+
+      - name: Trigger Translation
+        if: steps.get-keys.outputs.key_ids != ''
+        run: |
+          echo "=== Triggering translation ==="
+          
+          IFS=',' read -ra LANGS <<< "${{ github.event.inputs.target_languages }}"
+          IFS=',' read -ra KEYS <<< "${{ steps.get-keys.outputs.key_ids }}"
+          
+          for lang in "${LANGS[@]}"; do
+            echo "Translating to language: $lang"
+            
+            for key in "${KEYS[@]}"; do
+              if [ ! -z "$key" ]; then
+                echo "Translating key: $key to $lang"
+                
+                response=$(curl -s -X POST \
+                  "https://api.lokalise.com/api2/projects/${{ secrets.LOKALISE_PROJECT_ID }}/keys/$key/translations/$lang" \
+                  -H "X-Api-Token: ${{ secrets.LOKALISE_API_TOKEN }}" \
+                  -H "Content-Type: application/json" \
+                  -d "{
+                    \"translation\": \"AUTO_TRANSLATE\",
+                    \"is_fuzzy\": false
+                  }")
+                
+                echo "Translation response: $response"
+                sleep 1  # Rate limiting
+              fi
+            done
+          done
+
+      - name: Alternative - Bulk Translation
+        if: steps.get-keys.outputs.key_ids != ''
+        run: |
+          echo "=== Alternative: Using Lokalise CLI for bulk translation ==="
+          
+          # Install Lokalise CLI
+          curl -sfL https://raw.githubusercontent.com/lokalise/lokalise-cli-2-go/master/install.sh | sh
+          
+          # Try to trigger auto-translation using CLI
+          IFS=',' read -ra LANGS <<< "${{ github.event.inputs.target_languages }}"
+          
+          for lang in "${LANGS[@]}"; do
+            echo "Attempting auto-translation for $lang"
+            
+            # This command might trigger auto-translation
+            ./bin/lokalise2 key list \
+              --project-id "${{ secrets.LOKALISE_PROJECT_ID }}" \
+              --token "${{ secrets.LOKALISE_API_TOKEN }}" \
+              --filter-langs "$lang" \
+              --filter-translation-status "untranslated" || true
+          done
