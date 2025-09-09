@@ -1,0 +1,51 @@
+name: Debug Lokalise Project
+
+on:
+  workflow_dispatch:  # Manual trigger only
+
+jobs:
+  debug-lokalise:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Install curl and jq
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y curl jq
+
+      - name: Check Lokalise Project Info
+        run: |
+          echo "=== Checking Lokalise Project ==="
+          
+          # Get project info
+          echo "Project Info:"
+          curl -s -X GET \
+            "https://api.lokalise.com/api2/projects/${{ secrets.LOKALISE_PROJECT_ID }}" \
+            -H "X-Api-Token: ${{ secrets.LOKALISE_API_TOKEN }}" | jq '.'
+          
+          echo -e "\n=== Checking Available Keys ==="
+          
+          # Get all keys (first 20)
+          echo "Available Keys:"
+          curl -s -X GET \
+            "https://api.lokalise.com/api2/projects/${{ secrets.LOKALISE_PROJECT_ID }}/keys?limit=20" \
+            -H "X-Api-Token: ${{ secrets.LOKALISE_API_TOKEN }}" | jq -r '.keys[] | "Key: \(.key_name.web) | Tags: \(.tags // []) | Platforms: \(.platforms // [])"'
+          
+          echo -e "\n=== Checking Available Languages ==="
+          
+          # Get all languages
+          echo "Available Languages:"
+          curl -s -X GET \
+            "https://api.lokalise.com/api2/projects/${{ secrets.LOKALISE_PROJECT_ID }}/languages" \
+            -H "X-Api-Token: ${{ secrets.LOKALISE_API_TOKEN }}" | jq -r '.languages[] | "Language: \(.lang_name) (\(.lang_iso)) | Progress: \(.statistics.progress_percent)%"'
+          
+          echo -e "\n=== Checking Files ==="
+          
+          # Get all files
+          echo "Available Files:"
+          curl -s -X GET \
+            "https://api.lokalise.com/api2/projects/${{ secrets.LOKALISE_PROJECT_ID }}/files" \
+            -H "X-Api-Token: ${{ secrets.LOKALISE_API_TOKEN }}" | jq -r '.files[] | "File: \(.filename) | Key count: \(.key_count)"'
