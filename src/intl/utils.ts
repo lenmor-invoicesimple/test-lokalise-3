@@ -1,6 +1,7 @@
 import langParser from 'accept-language-parser';
 
 const locales = ['en-US', 'fr-FR', 
+  'es-ES'
     // 'de-DE', 'it-IT', 'es-ES', 'nl-NL'
 ];
 
@@ -47,6 +48,7 @@ export const findBestMatchingLocale = (acceptLangHeader: string) => {
       });
 
       if (matchedLanguage) {
+        console.log(`Found matching language: ${matchedLanguage}`);
         return matchedLanguage;
       }
     }
