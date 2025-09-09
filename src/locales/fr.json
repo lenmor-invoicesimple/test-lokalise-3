@@ -3,5 +3,11 @@
     "greeting": "Bonjour le monde!",
     "welcome": "Bienvenue sur notre site.",
     "test_key": "Rame, rame, rame ton bateau",
-    "test.key.1": "Les roues du bus"
+    "test.key.1": "Les roues du bus",
+    "new.key": "Quelque chose de nouveau",
+    "new.key.2": "Encore quelque chose de nouveau",
+    "new.key.3": "",
+    "new.key.4": "",
+    "new.key.5": "Ceci devrait être mis à jour à 11h39",
+    "new.key.6": "Nouvelle clé"
 }
