@@ -1,0 +1,29 @@
+name: Push to Lokalise
+
+on:
+  workflow_dispatch:  # Manual trigger
+  push:
+    branches:
+      - main  # Automatically trigger on push to main
+    paths:
+      - 'src/locales/**'  # Only trigger when translation files change
+
+jobs:
+  push-translations:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Push files to Lokalise
+        uses: lokalise/lokalise-push-action@v3.6.0
+        with:
+          api_token: ${{ secrets.LOKALISE_API_TOKEN }}
+          project_id: ${{ secrets.LOKALISE_PROJECT_ID }}  # Replace with your actual project ID
+          file_format: json
+          translations_path: src/locales
+          base_lang: en  # Your base language
+          flat_naming: true  # Since your files are like src/locales/en.json, not src/locales/en/file.json
