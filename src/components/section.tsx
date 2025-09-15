@@ -31,10 +31,10 @@ export default function Section() {
         </select>
       </div>
       <h1 className="text-2xl font-bold">
-        {fta({ id: "greeting" })}
+        {fta({ id: "greeting2" })}
       </h1>
       <p className="text-lg">
-        {fta({ id: "welcome"})}
+        {fta({ id: "welcome2"})}
       </p>
     </div>
   );
