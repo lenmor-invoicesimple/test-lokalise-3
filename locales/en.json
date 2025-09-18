@@ -1,4 +1,5 @@
 {
     "welcome_header": "Hello world again!",
-    "greeting": "One two three"
+    "greeting": "One two three",
+    "farewell": "Goodbye!"
 }
