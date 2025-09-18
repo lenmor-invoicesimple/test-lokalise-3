@@ -1,17 +1,3 @@
 {
-    "welcome_header": "¡Hola Mundo!",
-    "greeting2": "¡Hola Mundo!",
-    "welcome2": "Bienvenido a nuestro sitio.",
-    "test_key": "Rema, rema, rema tu bote",
-    "test.key.1": "Ruedas del autobús",
-    "new.key": "Algo nuevo",
-    "new.key.2": "Algo nuevo otra vez",
-    "new.key.3": "Actualice este de nuevo",
-    "new.key.4": "Algo nuevo otra vez",
-    "new.key.5": "Una clave completamente diferente",
-    "new.key.6": "La mejor pizza de la ciudad esta noche.",
-    "new.key.7": "Una nueva prueba clave",
-    "new.key.8": "",
-    "test.key.2": "El conductor del autobús sube y baja.",
-    "test.key.3": "Nueva clave aquí"
+    "welcome_header": "¡Hola Mundo!"
 }
