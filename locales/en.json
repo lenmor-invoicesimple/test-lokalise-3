@@ -1,19 +1,4 @@
 {
     "welcome_header": "Hello world again!",
-    "greeting2": "Hello, world again!",
-    "welcome2": "Welcome to our site.",
-    "test_key": "Row row row your boat",
-    "test.key.1": "Wipers on the bus",
-    "new.key": "Something new",
-    "new.key.2": "Something new again",
-    "new.key.3": "Update this one again",
-    "new.key.4": "Something new again",
-    "new.key.5": "A completely different key",
-    "new.key.6": "Best pizza in town tonight",
-    "new.key.7": "An updated key",
-    "new.key.8": "A new key again",
-    "test.key.2": "Driver on the jeep",
-    "test.key.3": "Electric fan",
-    "test.key.4": "Another new key",
-    "test.key.5": "Another new key"
+    "greeting": "One two three"
 }
