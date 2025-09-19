@@ -6,13 +6,13 @@ on:
     branches:
       - main  # Auto-trigger when pushing to main
     paths:
-      - 'src/locales/en*.json'  # Only when English source files change
+      - 'locales/en*.json'  # Only when English source files change
   pull_request:
     types: [closed]
     branches:
       - main  # Auto-trigger when PR is merged to main
     paths:
-      - 'src/locales/en*.json'
+      - 'locales/en*.json'
 
 jobs:
   translate-and-pull:
@@ -38,13 +38,13 @@ jobs:
           curl -sSL https://raw.githubusercontent.com/lokalise/lokalise-cli-2-go/master/install.sh | sh
           
           # Check if English source file exists
-          if [ -f "src/locales/en.json" ]; then
+          if [ -f "locales/en.json" ]; then
             echo "Found en.json, uploading to Lokalise..."
             
             ./bin/lokalise2 file upload \
               --token ${{ secrets.LOKALISE_API_TOKEN }} \
               --project-id ${{ secrets.LOKALISE_PROJECT_ID }} \
-              --file "src/locales/en.json" \
+              --file "locales/en.json" \
               --lang-iso en \
               --replace-modified \
               --include-path \
@@ -53,7 +53,7 @@ jobs:
             
             echo "✅ English source file uploaded to Lokalise"
           else
-            echo "⚠️ No en.json found in src/locales/"
+            echo "⚠️ No en.json found in locales/"
           fi
 
       - name: Step 2 - Wait for Lokalise automation to complete
@@ -112,7 +112,7 @@ jobs:
       - name: Step 4 - Debug file structure before pull
         run: |
           echo "=== Current file structure ==="
-          ls -la src/locales/ || echo "src/locales directory doesn't exist"
+          ls -la locales/ || echo "locales/ directory doesn't exist"
           echo ""
           echo "=== Testing Lokalise CLI download manually ==="
           curl -sSL https://raw.githubusercontent.com/lokalise/lokalise-cli-2-go/master/install.sh | sh
@@ -133,7 +133,7 @@ jobs:
         with:
           api_token: ${{ secrets.LOKALISE_API_TOKEN }}
           project_id: ${{ secrets.LOKALISE_PROJECT_ID }}
-          translations_path: src/locales
+          translations_path: locales
           base_lang: en
           file_format: json
           flat_naming: true
@@ -144,14 +144,14 @@ jobs:
       - name: Step 6 - Check what changed after pull
         run: |
           echo "=== Files after pull ==="
-          ls -la src/locales/
+          ls -la locales/
           echo ""
           echo "=== Git status after pull ==="
           git status
           echo ""
           echo "=== Git diff after pull ==="
           git diff --name-only || echo "No differences found"
-          git diff src/locales/ || echo "No changes in src/locales/"
+          git diff locales/ || echo "No changes in locales/"
 
       - name: Step 7 - Summary
         run: |
