@@ -1,10 +1,12 @@
 {
-    "welcome_header": "Bonjour à nouveau le monde !",
-    "greeting": "Un deux trois",
-    "test.key.1": "clé de test",
-    "test.key.2": "une autre clé de test",
-    "test.key.4": "",
-    "test.key.5": "Demain",
-    "test.key.6": "Ces rêves",
-    "test.key.7": "se réalisera"
+    "welcome_header": "",
+    "greeting": "",
+    "test.key.1": "",
+    "test.key.2": "",
+    "test.key.4": "Les conducteurs du bus",
+    "test.key.5": "",
+    "test.key.6": "",
+    "test.key.7": "",
+    "test.key.8": "Cette clé est uniquement en anglais",
+    "test.key.9": "Cette clé est également uniquement en anglais"
 }
